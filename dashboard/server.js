@@ -1,6 +1,7 @@
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { getConfig } from "./server/config.js";
 import {
   assertGuildAccess,
@@ -16,6 +17,46 @@ import { fetchDiscordToken, fetchDiscordUser, fetchUserGuilds } from "./server/d
 import { assertRateLimit } from "./server/rate-limit.js";
 import { consumeOauthState, createOauthState, createSession, destroySession, getSession } from "./server/session.js";
 import { antiNukePatchSchema, guildPatchSchema } from "./server/validators.js";
+
+const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
+
+function loadEnvFile(filePath) {
+  if (!existsSync(filePath)) return;
+
+  const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+
+    if (!key || Object.prototype.hasOwnProperty.call(process.env, key)) {
+      continue;
+    }
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(join(rootDir, ".env"));
+loadEnvFile(join(process.cwd(), ".env"));
 
 const distDir = join(process.cwd(), "dist");
 const port = Number(process.env.PORT || 3000);
